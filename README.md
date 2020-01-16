@@ -1,7 +1,7 @@
 # CurveBall (CVE-2020-0601) - PoC
 CVE-2020-0601, or commonly referred to as CurveBall, is a vulnerability in which the signature of certificates using elliptic curve cryptography (ECC) is not correctly verified. 
 
-ECC relies on different parameters. These parameters are standardized for many curves. However, Microsoft didn't check all these parameters. The parameter `G` (the generator) was not checked, and the attacker can therefore supply his own generator, such that when Microsoft tries to validate the certificate against a trusted CA, it'll only look for matching public keys, and then use then use the generator of the certificate. NSA explains the impact of this vulnerability and more [here](https://media.defense.gov/2020/Jan/14/2002234275/-1/-1/0/CSA-WINDOWS-10-CRYPT-LIB-20190114.PDF).
+ECC relies on different parameters. These parameters are standardized for many curves. However, Microsoft didn't check all these parameters. The parameter `G` (the generator) was not checked, and the attacker can therefore supply his own generator, such that when Microsoft tries to validate the certificate against a trusted CA, it'll only look for matching public keys, and then use the generator of the certificate. NSA explains the impact of this vulnerability and more [here](https://media.defense.gov/2020/Jan/14/2002234275/-1/-1/0/CSA-WINDOWS-10-CRYPT-LIB-20190114.PDF).
 
 `MicrosoftECCProductRootCertificateAuthority.cer` is by default a trusted root certificate authority (CA) using ECC on Windows 10. Anything signed with this certificate will therefore automatically be trusted.  
 ## Mathematical details
