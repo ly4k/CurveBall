@@ -72,4 +72,4 @@ Sign your new CSR with our spoofed CA and CA key. This certificate will expire i
     openssl x509 -req -in cert.csr -CA spoofed_ca.crt -CAkey spoofed_ca.key -CAcreateserial -out cert.crt -days 10000 -extfile openssl_tls.conf -extensions v3_tls
 You can now use `cert.crt`, `cert.key`, and `spoofed_ca.crt` to serve your content. Again, remember to add the spoofed_ca.crt as a certificate chain in your server's HTTPS configuration.
 
-See the usage example in [tls/index.js](https://github.com/ollypwn/CVE-2020-0601/tls/index.js).
+See the usage example in [tls/index.js](https://github.com/ollypwn/CVE-2020-0601/blob/master/tls/index.js).
