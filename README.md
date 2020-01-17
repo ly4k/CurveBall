@@ -4,6 +4,11 @@ CVE-2020-0601, or commonly referred to as CurveBall, is a vulnerability in which
 ECC relies on different parameters. These parameters are standardized for many curves. However, Microsoft didn't check all these parameters. The parameter `G` (the generator) was not checked, and the attacker can therefore supply his own generator, such that when Microsoft tries to validate the certificate against a trusted CA, it'll only look for matching public keys, and then use then use the generator of the certificate. NSA explains the impact of this vulnerability and more [here](https://media.defense.gov/2020/Jan/14/2002234275/-1/-1/0/CSA-WINDOWS-10-CRYPT-LIB-20190114.PDF).
 
 `MicrosoftECCProductRootCertificateAuthority.cer` is by default a trusted root certificate authority (CA) using ECC on Windows 10. Anything signed with this certificate will therefore automatically be trusted.  
+
+**Minimum requirements**
+`openssl 1.1.0`
+`ruby 2.4.0`
+
 ## Mathematical details
 If you're interested in the mathematical details of the vulnerability, please read more [here](https://news.ycombinator.com/item?id=22048619).
 
@@ -35,7 +40,7 @@ Extract the public key from the CA and modify it according to the vulnerability:
 Generate a new x509 certificate based on this key. This will be our own spoofed CA.
 
     openssl req -new -x509 -key spoofed_ca.key -out spoofed_ca.crt
-Generate a new key. This key be of any type you want. It will be used to create a code signing certificate, which we will sign with our own CA.
+Generate a new key. This key can be of any type you want. It will be used to create a code signing certificate, which we will sign with our own CA.
 
     openssl ecparam -name secp384r1 -genkey -noout -out cert.key
 Next up, create a new  certificate signing request (CSR). This request will oftenly be sent to trusted CA's, but since we have a spoofed one, we can sign it ourselves.
@@ -59,7 +64,7 @@ Extract the public key from the CA and modify it according to the vulnerability:
 Generate a new x509 certificate based on this key. This will be our own spoofed CA.
 
     openssl req -new -x509 -key spoofed_ca.key -out spoofed_ca.crt
-Generate a new key. This key be of any type you want. It will be used to create a code signing certificate, which we will sign with our own CA.
+Generate a new key. This key be of any type you want. It will be used to create a SSL certificate, which we will sign with our own CA.
 
     openssl ecparam -name secp384r1 -genkey -noout -out cert.key
 Next up, create a new  certificate signing request (CSR). This request will oftenly be sent to trusted CA's, but since we have a spoofed one, we can sign it ourselves.
